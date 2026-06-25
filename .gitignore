@@ -1,0 +1,6 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.kakao_tokens.json
+stock_monitor.log

@@ -1,0 +1,69 @@
+name: Daily Stock Briefing
+
+on:
+  schedule:
+    - cron: '30 21 * * 1-5'  # UTC 21:30 (Mon-Fri) = KST 06:30 (Tue-Sat), 미장 마감 30분 후
+  workflow_dispatch:
+
+jobs:
+  briefing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run briefing
+        env:
+          ANTHROPIC_API_KEY:    ${{ secrets.ANTHROPIC_API_KEY }}
+          KAKAO_REST_API_KEY:   ${{ secrets.KAKAO_REST_API_KEY }}
+          KAKAO_CLIENT_SECRET:  ${{ secrets.KAKAO_CLIENT_SECRET }}
+          KAKAO_REFRESH_TOKEN:  ${{ secrets.KAKAO_REFRESH_TOKEN }}
+          NEWSAPI_KEY:          ${{ secrets.NEWSAPI_KEY }}
+        run: python main.py
+
+      - name: Update KAKAO_REFRESH_TOKEN secret if renewed
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ secrets.GH_PAT }}
+        run: |
+          if [ ! -f .kakao_tokens.json ]; then
+            echo "토큰 캐시 파일 없음 — 갱신 불필요"
+            exit 0
+          fi
+
+          NEW_REFRESH=$(python -c "
+          import json
+          try:
+              data = json.load(open('.kakao_tokens.json'))
+              print(data.get('refresh_token', ''), end='')
+          except:
+              print('', end='')
+          ")
+
+          if [ -z "$NEW_REFRESH" ]; then
+            echo "refresh_token 갱신 없음 — Secret 유지"
+          else
+            echo "새 refresh_token 감지 — GitHub Secret 업데이트"
+            echo "$NEW_REFRESH" | gh secret set KAKAO_REFRESH_TOKEN --repo "$GITHUB_REPOSITORY"
+          fi
+
+          rm -f .kakao_tokens.json
+
+      - name: Upload log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-briefing-log-${{ github.run_number }}
+          path: stock_monitor.log
+          retention-days: 7
