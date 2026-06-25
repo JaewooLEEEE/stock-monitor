@@ -1,15 +1,14 @@
-"""Claude AI로 수집 데이터를 한국어 브리핑으로 요약."""
+"""Gemini AI로 수집 데이터를 한국어 브리핑으로 요약."""
 from __future__ import annotations
 
 import os
-import json
 import logging
 
-import anthropic
+import google.generativeai as genai
 
 logger = logging.getLogger(__name__)
 
-MODEL = "claude-haiku-4-5-20251001"
+MODEL = "gemini-1.5-flash"
 
 
 def _fmt_market(data: dict) -> str:
@@ -62,9 +61,9 @@ def _fmt_news(news: dict) -> str:
 
 
 def generate_briefing(market_data: dict, earnings: list[dict], news: dict) -> str:
-    api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+    api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
-        logger.warning("ANTHROPIC_API_KEY 미설정 — 원시 데이터만 반환")
+        logger.warning("GEMINI_API_KEY 미설정 — 원시 데이터만 반환")
         return f"{_fmt_market(market_data)}\n\n{_fmt_earnings(earnings)}"
 
     raw_data = f"""
@@ -98,15 +97,12 @@ def generate_briefing(market_data: dict, earnings: list[dict], news: dict) -> st
 인사말 없이 바로 시작. 총 800자 이내."""
 
     try:
-        client = anthropic.Anthropic(api_key=api_key)
-        msg    = client.messages.create(
-            model=MODEL,
-            max_tokens=2048,
-            messages=[{"role": "user", "content": prompt}],
-        )
-        briefing = msg.content[0].text.strip()
-        logger.info("Claude 브리핑 생성 완료 (%d자)", len(briefing))
+        genai.configure(api_key=api_key)
+        model    = genai.GenerativeModel(MODEL)
+        response = model.generate_content(prompt)
+        briefing = response.text.strip()
+        logger.info("Gemini 브리핑 생성 완료 (%d자)", len(briefing))
         return briefing
     except Exception as e:
-        logger.error("Claude API 호출 실패: %s", e)
+        logger.error("Gemini API 호출 실패: %s", e)
         return raw_data
