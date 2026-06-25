@@ -4,11 +4,11 @@ from __future__ import annotations
 import os
 import logging
 
-import google.generativeai as genai
+from google import genai
 
 logger = logging.getLogger(__name__)
 
-MODEL = "gemini-1.5-flash"
+MODEL = "gemini-2.0-flash"
 
 
 def _fmt_market(data: dict) -> str:
@@ -97,9 +97,8 @@ def generate_briefing(market_data: dict, earnings: list[dict], news: dict) -> st
 인사말 없이 바로 시작. 총 800자 이내."""
 
     try:
-        genai.configure(api_key=api_key)
-        model    = genai.GenerativeModel(MODEL)
-        response = model.generate_content(prompt)
+        client   = genai.Client(api_key=api_key)
+        response = client.models.generate_content(model=MODEL, contents=prompt)
         briefing = response.text.strip()
         logger.info("Gemini 브리핑 생성 완료 (%d자)", len(briefing))
         return briefing
