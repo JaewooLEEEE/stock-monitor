@@ -1,18 +1,18 @@
 # stock-monitor
 
-미국 증시 마감 직후 자동으로 데이터를 수집하고 Claude AI가 서술형으로 분석한 브리핑을 카카오톡으로 받는 시스템입니다.
+미국 증시 마감 직후 자동으로 데이터를 수집하고 Gemini AI가 서술형으로 분석한 브리핑을 카카오톡으로 받는 시스템입니다.
 
 ---
 
 ## 기능
 
 - 미국 3대 지수 (S&P500, 나스닥, 다우) + VIX 수집
-- 매크로 지표 (미 10년물 금리, 달러인덱스, 달러/원, 달러/엔, 금, WTI원유)
+- 매크로 지표 (미 10년물 금리[ZN=F], 달러인덱스, 달러/원, 달러/엔, 금, WTI원유)
 - 반도체 섹터 (NVDA, AMD, INTC, TSM, ASML, AMAT, MU, QCOM)
 - 빅테크 (AAPL, MSFT, AMZN, META, GOOGL)
 - 전날 실적 발표 종목 자동 감지 (EPS 예상 대비 실제, 서프라이즈%)
 - 글로벌 뉴스 수집 (NEWSAPI_KEY 있으면 NewsAPI, 없으면 yfinance 내장 뉴스)
-- Claude AI로 숫자 나열이 아닌 **왜 그렇게 움직였는지** 서술형 브리핑 생성
+- Gemini AI(`gemini-2.0-flash`)로 숫자 나열이 아닌 **왜 그렇게 움직였는지** 서술형 브리핑 생성
 - 카카오톡 분할 전송 (850자 초과 시 자동 분할)
 - 카카오 Refresh Token 자동 갱신 (최초 1회 등록 후 무기한 자동 운용)
 - GitHub Actions artifact로 로그 7일 보관
@@ -54,11 +54,13 @@ git commit -m "init"
 git push -u origin main
 ```
 
-### 2. Anthropic API 키 발급
+### 2. Gemini API 키 발급 (무료, 신용카드 불필요)
 
-1. [Anthropic Console](https://console.anthropic.com) 접속
-2. **API Keys** → **Create Key**
+1. [Google AI Studio](https://aistudio.google.com/app/apikey) 접속 (구글 계정으로 로그인)
+2. **Create API key** 클릭
 3. 키 복사
+
+> 무료 티어: 하루 1,500 요청 / 분당 15 요청. 일 1회 실행으로 충분합니다.
 
 ### 3. 카카오 토큰 발급
 
@@ -71,7 +73,7 @@ apt-monitor와 동일한 카카오 앱/토큰을 재사용할 수 있습니다.
 
 | Secret 이름           | 값                              | 필수 |
 |----------------------|---------------------------------|------|
-| `ANTHROPIC_API_KEY`  | Anthropic API 키                | ✅   |
+| `GEMINI_API_KEY`     | Google AI Studio API 키          | ✅   |
 | `KAKAO_REST_API_KEY` | 카카오 앱의 REST API 키          | ✅   |
 | `KAKAO_REFRESH_TOKEN`| 카카오 refresh_token             | ✅   |
 | `GH_PAT`             | repo 권한의 GitHub Personal Access Token | ✅ |
@@ -80,6 +82,7 @@ apt-monitor와 동일한 카카오 앱/토큰을 재사용할 수 있습니다.
 
 > **apt-monitor와 같은 카카오 계정을 쓴다면** Secrets 값을 그대로 복사하면 됩니다.
 > apt-monitor의 `copy_secrets.yml` 워크플로를 수동 실행하면 자동으로 복사됩니다.
+> `GEMINI_API_KEY`는 수동으로 직접 등록해야 합니다 (apt-monitor에 없는 키).
 
 ### 5. GitHub Actions 권한 설정
 
@@ -122,7 +125,7 @@ stock-monitor/
 │   ├── market_data.py             # yfinance로 지수/매크로/섹터 데이터 수집
 │   ├── earnings.py                # 전날 실적 발표 종목 감지
 │   ├── news_fetcher.py            # 뉴스 수집 (NewsAPI or yfinance)
-│   ├── analyzer.py                # Claude AI 서술형 브리핑 생성
+│   ├── analyzer.py                # Gemini AI 서술형 브리핑 생성
 │   ├── kakao_auth.py              # 카카오 토큰 갱신
 │   └── notifier.py                # 카카오톡 분할 전송
 └── .github/
@@ -147,8 +150,25 @@ apt-monitor와 동일한 방식으로 동작합니다.
 
 ---
 
+## 트러블슈팅
+
+### AI 브리핑 없이 숫자만 나오는 경우
+
+Actions 로그에서 `Run python main.py` 스텝을 확인:
+
+- `GEMINI_API_KEY 미설정` → Secret 값이 비어있음. 삭제 후 재등록
+- `Gemini API 호출 실패: 404` → 모델명 또는 패키지 버전 문제
+- `Gemini 브리핑 생성 완료` → 정상
+
+### 금리 데이터 수집 실패
+
+`^TNX`, `^TYX` 등 yfinance Treasury 티커는 불안정합니다. 현재 `ZN=F`(10년물 국채 선물)를 사용하며, 이것도 실패하면 해당 항목만 생략되고 나머지는 정상 동작합니다.
+
+---
+
 ## 주의사항
 
 - yfinance 데이터는 실시간이 아니며 전날 종가 기준입니다.
 - NewsAPI 무료 플랜은 하루 100건 제한이 있습니다. 일 1회 실행이므로 충분합니다.
 - `.kakao_tokens.json` 은 워크플로 실행 후 자동 삭제됩니다.
+- `ANTHROPIC_API_KEY`는 더 이상 사용하지 않습니다. `GEMINI_API_KEY`를 사용합니다.
